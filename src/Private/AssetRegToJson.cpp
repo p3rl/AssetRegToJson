@@ -6,6 +6,7 @@
 
 #include "HAL/FileManager.h"
 #include "Misc/CommandLine.h"
+#include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 #include "Serialization/ArrayReader.h"
 #include "Serialization/Archive.h"
@@ -28,8 +29,12 @@ struct FAssetRegToJsonArgs
 	{
 		FAssetRegToJsonArgs Args;
 
-		Args.bIsValid |= FParse::Value(Cmdline, TEXT("Input="), Args.InputPath);
-		Args.bIsValid |= FParse::Value(Cmdline, TEXT("Output="), Args.OutputPath);
+		Args.bIsValid = FParse::Value(Cmdline, TEXT("Input="), Args.InputPath);
+
+		if (!FParse::Value(Cmdline, TEXT("Output="), Args.OutputPath))
+		{
+			Args.OutputPath = FPaths::ChangeExtension(Args.InputPath, TEXT("json"));
+		}
 
 		return Args;
 	}
@@ -42,7 +47,8 @@ INT32_MAIN_INT32_ARGC_TCHAR_ARGV()
 	FAssetRegToJsonArgs Args = FAssetRegToJsonArgs::Parse(FCommandLine::Get());
 	if (!Args.bIsValid)
 	{
-		UE_LOG(LogAssetRegToJson, Display, TEXT("Invalid options"));
+		UE_LOG(LogAssetRegToJson, Display, TEXT("Usage: AssetRegJson.exe -Input=<Path/To/AssetRegistry.bin> -Output=<Path/To/AssetRegistry.json>"));
+		FEngineLoop::AppExit();
 		return -1;
 	}
 
@@ -50,6 +56,7 @@ INT32_MAIN_INT32_ARGC_TCHAR_ARGV()
 	if (!FFileHelper::LoadFileToArray(SerializedAssetData, *Args.InputPath))
 	{
 		UE_LOG(LogAssetRegToJson, Display, TEXT("Failed to read asset registry file '%s'"), *Args.InputPath);
+		FEngineLoop::AppExit();
 		return -1;
 	}
 
@@ -60,9 +67,10 @@ INT32_MAIN_INT32_ARGC_TCHAR_ARGV()
 	if (!AssetRegistry.Serialize(SerializedAssetData, Options))
 	{
 		UE_LOG(LogAssetRegToJson, Display, TEXT("Failed to load asset registry '%s'"), *Args.InputPath);
+		FEngineLoop::AppExit();
 		return -1;
 	}
-
+	
 	TSet<FName> PackageNames;
 	TSet<FName> PackageNamesToSkip;
 	AssetRegistry.EnumerateAllAssets(PackageNamesToSkip, [&](const FAssetData& AssetData)
@@ -125,6 +133,8 @@ INT32_MAIN_INT32_ARGC_TCHAR_ARGV()
 	{
 		UE_LOG(LogAssetRegToJson, Display, TEXT("Failed to save asset registry '%s'"), *Args.OutputPath);
 	}
+	
+	UE_LOG(LogAssetRegToJson, Display, TEXT("Asset registry JSON file saved to '%s'"), *Args.OutputPath);
 	
 	FEngineLoop::AppExit();
 	return 0;
